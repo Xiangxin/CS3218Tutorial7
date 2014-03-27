@@ -91,8 +91,7 @@ public class CSurfaceView extends SurfaceView implements SurfaceHolder.Callback 
 		private static final int FFT_Len = 512;
 		private double[] redCurve, blueCurve, convertedBlueCurve,
 				convolutionCurve, correlationCurve;
-		private double[] redStatic, blueStatic, redFFT, blueFFT, blueFFTCC, redFFTMag, blueFFTCCMag,
-				blueFFTMag, convolutionFFT, convolutionFFTMag, correlationFFT, correlationFFTMag;
+		private double[] redStatic, blueStatic, redFFT, blueFFT, blueFFTCC, convolutionFFT, convolutionFFTMag, correlationFFT, correlationFFTMag;
 
 		public DrawThread(SurfaceHolder paramContext, Context paramHandler, Handler arg4) {
 			soundSurfaceHolder = paramContext;
@@ -268,40 +267,29 @@ public class CSurfaceView extends SurfaceView implements SurfaceHolder.Callback 
 					
 					// Get complex conjugate of blueFFT
 					blueFFTCC = Arrays.copyOf(blueFFT, 2 * FFT_Len);
-					for(int i = 0; i < 2 * FFT_Len; i++) {
+					for(int i = 1; i < 2 * FFT_Len; i += 2) {
 						blueFFTCC[i] *= -1; 
 					}
-					fft.complexForward(blueFFTCC);
 					
 					// Multiply
-					redFFTMag = new double[FFT_Len];
-					blueFFTMag = new double[FFT_Len];
-					blueFFTCCMag = new double[FFT_Len];
 					convolutionFFT = new double[2 * FFT_Len];
 					correlationFFT = new double[2 * FFT_Len];
 					for (int i = 0; i < FFT_Len; i++) {
-						double re = redFFT[2 * i];
-						double im = redFFT[2 * i + 1];
-						redFFTMag[i] = Math.sqrt(re * re + im * im);
+						double a = redFFT[2 * i];
+						double b = redFFT[2 * i + 1];
+
+						double c = blueFFT[2 * i];
+						double d = blueFFT[2 * i + 1];
 						
-						double re2 = blueFFT[2 * i];
-						double im2 = blueFFT[2 * i + 1];
-						blueFFTMag[i] = Math.sqrt(re2 * re2 + im2 * im2);
+						double e = blueFFTCC[2 * i];
+						double f = blueFFTCC[2 * i + 1];
 						
-						double re3 = blueFFTCC[2 * i];
-						double im3 = blueFFTCC[2 * i + 1];
-						blueFFTCCMag[i] = Math.sqrt(re3 * re3 + im3 * im3);
+						convolutionFFT[i * 2] = a*c - b*d;
+						convolutionFFT[i * 2 + 1] = a*d + b*c;
 						
-						convolutionFFT[i * 2] = redFFTMag[i] * blueFFTMag[i];
-						convolutionFFT[i * 2 + 1] = 0.0;
-						
-						correlationFFT[i * 2] = redFFTMag[i] * blueFFTCCMag[i];
-						correlationFFT[i * 2 + 1] = 0.0;
+						correlationFFT[i * 2] = a*e - b*f;
+						correlationFFT[i * 2 + 1] = a*f + b*e;
 					}
-					
-					//Log.i(TAG, "RED FFT" + Arrays.toString(redFFTMag));
-					//Log.i(TAG, "BLUE FFT" + Arrays.toString(blueFFTMag));
-					//Log.i(TAG, "MULTIPLY" + Arrays.toString(blueFFTMag));
 					
 					// Inverse FFT
 					fft.complexInverse(convolutionFFT, false);
@@ -328,12 +316,12 @@ public class CSurfaceView extends SurfaceView implements SurfaceHolder.Callback 
 						correlationFFTMag[i] = correlationFFTMag[i] / mx2 * 200;
 					}
 					
-					Log.i(TAG, "CONVOLUTION" + Arrays.toString(convolutionFFTMag));
-					Log.i(TAG, "CORRELATION" + Arrays.toString(correlationFFTMag));
+//					Log.i(TAG, "CONVOLUTION" + Arrays.toString(convolutionFFTMag));
+//					Log.i(TAG, "CORRELATION" + Arrays.toString(correlationFFTMag));
 				}
 				
 				// Display
-				float yScale = 1; //width * 1.0f / FFT_Len
+				float yScale = -1; //width * 1.0f / FFT_Len
 				for (int i = 0; i < FFT_Len - 1; i++) {
 					
 					// original curve
@@ -350,22 +338,18 @@ public class CSurfaceView extends SurfaceView implements SurfaceHolder.Callback 
 					yStart *= yScale;
 					yStop *= yScale;
 
-					yStart += height / 5;
-					yStop += height / 5;
+					yStart += height / 2;
+					yStop += height / 2;
 				
 					canvas.drawLine(i, yStart, (i + 1), yStop, redPaint);
 					
 					// correlation curve
 					yStart = (float) correlationFFTMag[i];
 					yStop = (float) correlationFFTMag[i + 1];
-					
-					yStart *= yScale;
-					yStop *= yScale;
 
-					yStart += height * 2.0 / 3;
-					yStop += height * 2.0 / 3;
-					
-					// Log.i(TAG, "(" + yStart + ", " + yStop + ")");
+					yStart += height * 4.0 / 5;
+					yStop += height * 4.0 / 5;
+				
 					canvas.drawLine(i, yStart, (i + 1), yStop, redPaint);
 				}
 			}
