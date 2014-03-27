@@ -79,7 +79,7 @@ public class CSurfaceView extends SurfaceView implements SurfaceHolder.Callback 
 			public void run() {
 				drawThread.start();
 			}
-		}, 100);
+		}, 90);
 	}
 
 	class DrawThread extends Thread {
@@ -87,14 +87,14 @@ public class CSurfaceView extends SurfaceView implements SurfaceHolder.Callback 
 		private SurfaceHolder soundSurfaceHolder;
 		private Paint redPaint, bluePaint;
 		private int drawScale = 30;
+		private static final int blueCurveLength = 101;
 		private static final int FFT_Len = 512;
 		private double[] redCurve, blueCurve, convertedBlueCurve,
 				convolutionCurve, correlationCurve;
 		private double[] redStatic, blueStatic, redFFT, blueFFT, blueFFTCC, redFFTMag, blueFFTCCMag,
 				blueFFTMag, convolutionFFT, convolutionFFTMag, correlationFFT, correlationFFTMag;
 
-		public DrawThread(SurfaceHolder paramContext, Context paramHandler,
-				Handler arg4) {
+		public DrawThread(SurfaceHolder paramContext, Context paramHandler, Handler arg4) {
 			soundSurfaceHolder = paramContext;
 			soundBackgroundImage = Bitmap.createBitmap(1, 1,
 					Bitmap.Config.ARGB_8888);
@@ -133,15 +133,9 @@ public class CSurfaceView extends SurfaceView implements SurfaceHolder.Callback 
 					Arrays.fill(redCurve, 0);
 					Arrays.fill(redCurve, thresd1, thresd2 + 1, 2);
 				}
-				for (int x = 0; x < width; x++) {
-					yStart = yStop = 0;
-					if (x == thresd1 - 1) {
-						yStop = 2;
-					} else if (x >= thresd1 && x < thresd2) {
-						yStart = yStop = 2;
-					} else if (x == thresd2) {
-						yStart = 2;
-					}
+				for (int x = 0; x < width - 1; x++) {
+					yStart = (float) redCurve[x];
+					yStop = (float) redCurve[x + 1];
 
 					yStart *= -drawScale;
 					yStop *= -drawScale;
@@ -159,16 +153,12 @@ public class CSurfaceView extends SurfaceView implements SurfaceHolder.Callback 
 						blueCurve[i] = 1 - i / 100.0;
 					}
 				}
-
-				int x = blueCurvePos;
-				while (x < width && x - blueCurvePos < 100) {
-					if (x == blueCurvePos) {
-						yStart = 0;
-						yStop = (float) blueCurve[0];
-					} else {
-						yStart = (float) blueCurve[x - blueCurvePos];
-						yStop = (float) blueCurve[x - blueCurvePos + 1];
-					}
+				
+				// leftmost vertical line (just to look beautiful) 
+				canvas.drawLine(blueCurvePos, height / 8, blueCurvePos, (float) blueCurve[0] * (-drawScale) + height / 8, bluePaint);
+				for (int x = 0; x < blueCurveLength - 1; x++) {
+					yStart = (float) blueCurve[x];
+					yStop = (float) blueCurve[x + 1];
 
 					yStart *= -drawScale;
 					yStop *= -drawScale;
@@ -176,41 +166,34 @@ public class CSurfaceView extends SurfaceView implements SurfaceHolder.Callback 
 					yStart += height / 8;
 					yStop += height / 8;
 
-					canvas.drawLine(x, yStart, x + 1, yStop, bluePaint);
-					x++;
+					canvas.drawLine(blueCurvePos + x, yStart, blueCurvePos + x + 1, yStop, bluePaint);
 				}
 
 				// Convolution
 				if (convertedBlueCurve == null
 						|| convertedBlueCurve.length == 0) {
-					convertedBlueCurve = new double[101];
-					for (int i = 0; i <= 100; i++) {
-						convertedBlueCurve[i] = blueCurve[100 - i];
+					convertedBlueCurve = new double[blueCurveLength];
+					for (int i = 0; i < blueCurve.length; i++) {
+						convertedBlueCurve[i] = blueCurve[blueCurveLength - 1 - i];
 					}
+					
 					convolutionCurve = new double[width];
 					Arrays.fill(convolutionCurve, 0);
-					for (int i = thresd1; i <= thresd2 + 100; i++) {
-						for (int j = 0; j <= 100; j++)
+					for (int i = thresd1; i < thresd2 + blueCurveLength; i++) {
+						for (int j = 0; j < blueCurveLength; j++) {
 							convolutionCurve[i] += convertedBlueCurve[j]
-									* redCurve[i - 100 + j];
+									* redCurve[i - convertedBlueCurve.length + 1 + j];
+						}
 					}
 				}
 
-				for (x = 0; x < width - 1; x++) {
-					yStart = yStop = 0;
-					if (x == thresd1 - 1) {
-						yStop = 2;
-					} else if (x >= thresd1 && x < thresd2) {
-						yStart = yStop = 2;
-					} else if (x == thresd2) {
-						yStart = 2;
-					}
+				for (int x = 0; x < width - 1; x++) {
+					yStart = (float) redCurve[x];
+					yStop = (float) redCurve[x + 1];
 
-					if (x < blueCurvePos + 100) {
+					if (x < blueCurvePos + blueCurveLength) {
 						yStart = (float) convolutionCurve[x];
 						yStop = (float) convolutionCurve[x + 1];
-					} else if (x == blueCurvePos + 100) {
-						yStart = (float) convolutionCurve[x];
 					}
 
 					yStart *= -5;
@@ -226,28 +209,20 @@ public class CSurfaceView extends SurfaceView implements SurfaceHolder.Callback 
 				if (correlationCurve == null || correlationCurve.length == 0) {
 					correlationCurve = new double[width];
 					Arrays.fill(correlationCurve, 0);
-					for (int i = thresd1; i <= thresd2 + 100; i++) {
-						for (int j = 0; j <= 100; j++)
+					for (int i = thresd1; i < thresd2 + blueCurveLength; i++) {
+						for (int j = 0; j < blueCurveLength; j++)
 							correlationCurve[i] += blueCurve[j]
-									* redCurve[i - 100 + j];
+									* redCurve[i - blueCurveLength + 1 + j];
 					}
 				}
 
-				for (x = 0; x < width - 1; x++) {
-					yStart = yStop = 0;
-					if (x == thresd1 - 1) {
-						yStop = 2;
-					} else if (x >= thresd1 && x < thresd2) {
-						yStart = yStop = 2;
-					} else if (x == thresd2) {
-						yStart = 2;
-					}
+				for (int x = 0; x < width - 1; x++) {
+					yStart = (float) redCurve[x];
+					yStop = (float) redCurve[x + 1];
 
-					if (x < blueCurvePos + 100) {
+					if (x < blueCurvePos + blueCurveLength) {
 						yStart = (float) correlationCurve[x];
 						yStop = (float) correlationCurve[x + 1];
-					} else if (x == blueCurvePos + 100) {
-						yStart = (float) correlationCurve[x];
 					}
 
 					yStart *= -5;
@@ -416,7 +391,7 @@ public class CSurfaceView extends SurfaceView implements SurfaceHolder.Callback 
 							width = localCanvas.getWidth();
 							doDraw(localCanvas);
 							blueCurvePos += 1;
-							if (blueCurvePos >= width)
+							if (blueCurvePos + blueCurveLength >= width)
 								blueCurvePos = 0;
 						}
 					}
