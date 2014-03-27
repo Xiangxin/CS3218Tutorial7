@@ -91,7 +91,7 @@ public class CSurfaceView extends SurfaceView implements SurfaceHolder.Callback 
 		private static final int FFT_Len = 512;
 		private double[] redCurve, blueCurve, convertedBlueCurve,
 				convolutionCurve, correlationCurve;
-		private double[] redStatic, blueStatic, redFFT, blueFFT, blueFFTCC, convolutionFFT, convolutionFFTMag, correlationFFT, correlationFFTMag;
+		private double[] redStatic, blueStatic, redFFT, blueFFT, convolutionFFT, convolutionFFTMag, correlationFFT, correlationFFTMag;
 
 		public DrawThread(SurfaceHolder paramContext, Context paramHandler, Handler arg4) {
 			soundSurfaceHolder = paramContext;
@@ -265,11 +265,6 @@ public class CSurfaceView extends SurfaceView implements SurfaceHolder.Callback 
 					fft.complexForward(redFFT);
 					fft.complexForward(blueFFT);
 					
-					// Get complex conjugate of blueFFT
-					blueFFTCC = Arrays.copyOf(blueFFT, 2 * FFT_Len);
-					for(int i = 1; i < 2 * FFT_Len; i += 2) {
-						blueFFTCC[i] *= -1; 
-					}
 					
 					// Multiply
 					convolutionFFT = new double[2 * FFT_Len];
@@ -281,14 +276,11 @@ public class CSurfaceView extends SurfaceView implements SurfaceHolder.Callback 
 						double c = blueFFT[2 * i];
 						double d = blueFFT[2 * i + 1];
 						
-						double e = blueFFTCC[2 * i];
-						double f = blueFFTCC[2 * i + 1];
-						
 						convolutionFFT[i * 2] = a*c - b*d;
 						convolutionFFT[i * 2 + 1] = a*d + b*c;
 						
-						correlationFFT[i * 2] = a*e - b*f;
-						correlationFFT[i * 2 + 1] = a*f + b*e;
+						correlationFFT[i * 2] = a*c - b*(-d);
+						correlationFFT[i * 2 + 1] = a*(-d) + b*c;
 					}
 					
 					// Inverse FFT
